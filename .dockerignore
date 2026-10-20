@@ -1,0 +1,14 @@
+.git/
+.github/
+
+# Visual Studio Code
+.vscode/
+# Visual Studio
+.vs/
+# JetBrains IDEs
+.idea/
+
+# C# / .NET
+**/bin/
+**/obj/
+**/artifacts/

@@ -1,0 +1,148 @@
+@page "/"
+@using Jorvis.Core.Contracts
+@using Jorvis.Web.Services
+@inject TaskApiClient Api
+@inject ISnackbar Snackbar
+
+<PageTitle>Jorvis — Tasks</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Tasks</MudText>
+
+<MudPaper Class="pa-4 mb-6" Elevation="1">
+    <EditForm Model="_newTask" OnValidSubmit="AddTaskAsync">
+        <MudGrid>
+            <MudItem xs="12" sm="4">
+                <MudTextField T="string" Label="Title" @bind-Value="_newTask.Title" Required="true" />
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudTextField T="string?" Label="Notes" @bind-Value="_newTask.Notes" />
+            </MudItem>
+            <MudItem xs="12" sm="3">
+                <MudDatePicker Label="Due date" @bind-Date="_newTask.DueDateTime" />
+            </MudItem>
+            <MudItem xs="12" sm="1">
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
+                           Disabled="_saving" FullWidth="true">
+                    Add
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </EditForm>
+</MudPaper>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+}
+else if (_tasks.Count == 0)
+{
+    <MudText Typo="Typo.body1" Class="mud-text-secondary">No tasks yet. Add one above.</MudText>
+}
+else
+{
+    <MudTable Items="_tasks" Hover="true">
+        <HeaderContent>
+            <MudTh></MudTh>
+            <MudTh>Title</MudTh>
+            <MudTh>Notes</MudTh>
+            <MudTh>Due date</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Done">
+                <MudCheckBox T="bool" Value="context.IsDone"
+                             ValueChanged="@(isDone => ToggleDoneAsync(context, isDone))" />
+            </MudTd>
+            <MudTd DataLabel="Title">
+                <MudText Style="@(context.IsDone ? "text-decoration: line-through;" : null)">@context.Title</MudText>
+            </MudTd>
+            <MudTd DataLabel="Notes">@context.Notes</MudTd>
+            <MudTd DataLabel="Due date">@context.DueDate</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                               OnClick="@(() => DeleteTaskAsync(context))" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private List<TaskResponse> _tasks = [];
+    private NewTaskModel _newTask = new();
+    private bool _loading = true;
+    private bool _saving;
+
+    protected override async Task OnInitializedAsync() => await LoadTasksAsync();
+
+    private async Task LoadTasksAsync()
+    {
+        _loading = true;
+        try
+        {
+            _tasks = await Api.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not load tasks: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task AddTaskAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newTask.Title)) return;
+
+        _saving = true;
+        try
+        {
+            await Api.CreateAsync(new CreateTaskRequest(_newTask.Title, _newTask.Notes, _newTask.DueDate));
+            _newTask = new NewTaskModel();
+            await LoadTasksAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not add task: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ToggleDoneAsync(TaskResponse task, bool isDone)
+    {
+        try
+        {
+            await Api.UpdateAsync(task.Id, new UpdateTaskRequest(task.Title, task.Notes, task.DueDate, isDone));
+            await LoadTasksAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not update task: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeleteTaskAsync(TaskResponse task)
+    {
+        try
+        {
+            await Api.DeleteAsync(task.Id);
+            await LoadTasksAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not delete task: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private class NewTaskModel
+    {
+        public string Title { get; set; } = "";
+        public string? Notes { get; set; }
+        public DateTime? DueDateTime { get; set; }
+        public DateOnly? DueDate => DueDateTime is null ? null : DateOnly.FromDateTime(DueDateTime.Value);
+    }
+}

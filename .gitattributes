@@ -1,0 +1,65 @@
+# Normalize line endings to LF in the repo and the working tree (matches .editorconfig).
+* text=auto eol=lf
+
+# Source
+*.cs            text diff=csharp
+*.csx           text diff=csharp
+*.razor         text diff=html
+*.cshtml        text diff=html
+*.html          text diff=html
+*.css           text diff=css
+*.scss          text diff=css
+*.js            text
+*.mjs           text
+*.ts            text
+*.json          text
+*.xml           text
+*.svg           text
+
+# .NET project and solution files
+*.csproj        text
+*.props         text
+*.targets       text
+*.slnx          text
+*.sln           text eol=crlf
+*.resx          text
+*.http          text
+
+# Config, docs, scripts
+*.yml           text
+*.yaml          text
+*.md            text diff=markdown
+*.conf          text
+*.sh            text eol=lf
+*.ps1           text
+*.cmd           text eol=crlf
+*.bat           text eol=crlf
+Dockerfile      text eol=lf
+.dockerignore   text
+.editorconfig   text
+.gitignore      text
+.gitattributes  text
+
+# Generated EF Core migrations: collapse in diffs
+**/Migrations/*.cs linguist-generated=true
+**/Migrations/*.Designer.cs linguist-generated=true
+**/Migrations/*ModelSnapshot.cs linguist-generated=true
+
+# Binary assets
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.ico           binary
+*.webp          binary
+*.woff          binary
+*.woff2         binary
+*.ttf           binary
+*.eot           binary
+*.otf           binary
+*.wasm          binary
+*.dll           binary
+*.pdb           binary
+*.nupkg         binary
+*.zip           binary
+*.gz            binary

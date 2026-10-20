@@ -1,0 +1,27 @@
+## .NET
+bin/
+obj/
+artifacts/
+*.user
+*.suo
+
+## IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Logs
+*.log
+
+## EF Core
+*.db
+*.db-shm
+*.db-wal
+
+## Secrets
+.env

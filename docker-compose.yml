@@ -1,0 +1,66 @@
+name: jorvis
+
+services:
+  jorvis-postgres:
+    image: postgres:17-alpine
+    container_name: jorvis-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: jorvis
+      POSTGRES_USER: jorvis
+      POSTGRES_PASSWORD: jorvis
+    ports:
+      - "5432:5432"
+    volumes:
+      - jorvis-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jorvis -d jorvis"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  jorvis-api:
+    build:
+      context: .
+      dockerfile: src/Jorvis.Api/Dockerfile
+    container_name: jorvis-api
+    restart: unless-stopped
+    depends_on:
+      jorvis-postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Database: "Host=jorvis-postgres;Port=5432;Database=jorvis;Username=jorvis;Password=jorvis"
+    ports:
+      - "5117:8080"
+
+  jorvis-web:
+    build:
+      context: .
+      dockerfile: src/Jorvis.Web/Dockerfile
+    container_name: jorvis-web
+    restart: unless-stopped
+    depends_on:
+      - jorvis-api
+    ports:
+      - "5200:80"
+
+  jorvis-tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: jorvis-tunnel
+    restart: unless-stopped
+    profiles: ["tunnel"]
+    # Run as the host user so a mode-600 token file is readable on Linux and macOS.
+    user: "${JORVIS_UID:-65532}:${JORVIS_GID:-65532}"
+    command: tunnel --no-autoupdate run --token-file /run/secrets/cloudflare_tunnel_token
+    secrets:
+      - cloudflare_tunnel_token
+    depends_on:
+      - jorvis-web
+
+secrets:
+  cloudflare_tunnel_token:
+    file: ${JORVIS_CLOUDFLARE_TUNNEL_TOKEN_FILEPATH:-${HOME}/.config/jorvis/cloudflare-tunnel-token}
+
+volumes:
+  jorvis-postgres-data:
