@@ -1,3 +1,44 @@
+@implements IDisposable
+@inject ProjectApiClient Api
+
 <MudNavMenu>
-    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.CheckBox">Tasks</MudNavLink>
+    @* The group's title only expands and collapses it, so the projects page is its first link. *@
+    <MudNavGroup Title="Projects" Icon="@Icons.Material.Filled.Dashboard" @bind-Expanded="_expanded">
+        <MudNavLink Href="" Match="NavLinkMatch.All">All projects</MudNavLink>
+        @foreach (var project in _projects)
+        {
+            <MudNavLink Href="@($"projects/{project.Label}")" Match="NavLinkMatch.Prefix" Class="nav-project">@project.Name</MudNavLink>
+        }
+    </MudNavGroup>
 </MudNavMenu>
+
+@code {
+    private List<ProjectSummaryResponse> _projects = [];
+    private bool _expanded = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Api.ProjectsChanged += OnProjectsChanged;
+        await LoadAsync();
+    }
+
+    public void Dispose() => Api.ProjectsChanged -= OnProjectsChanged;
+
+    private void OnProjectsChanged() => _ = InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _projects = await Api.GetProjectsAsync();
+        }
+        catch (HttpRequestException)
+        {
+            // No session (the HTTP handler is already sending the browser to Sign In) or the API is down; the page says so.
+        }
+    }
+}

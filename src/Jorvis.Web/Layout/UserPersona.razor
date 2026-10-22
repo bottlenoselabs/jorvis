@@ -1,0 +1,68 @@
+@using Jorvis.Core.Contracts
+@using Jorvis.Web.Theming
+@using Jorvis.Web.Services
+@inject AuthApiClient Auth
+@inject ThemeState Themes
+@inject NavigationManager Navigation
+
+@if (_session is not null)
+{
+    <MudMenu FullWidth="true" AnchorOrigin="Origin.TopLeft" TransformOrigin="Origin.BottomLeft" Dense="true"
+             PopoverClass="persona-popover">
+        <ActivatorContent Context="menu">
+            @* A custom activator is handed the menu and has to toggle it itself. It also has to be a real button: the
+               wrapper MudBlazor puts around it has no box (display: contents), so it can't be reached with the keyboard. *@
+            <button type="button" class="persona-button d-flex align-center" title="@_session.Email" @onclick="@menu.ToggleAsync"
+                    aria-haspopup="menu" aria-label="@($"Account menu for {_session.UserName}")">
+                <MudAvatar Size="Size.Small" Color="Color.Primary">@Initial</MudAvatar>
+                <MudText Typo="Typo.body2" Class="persona-email ml-3">@_session.UserName</MudText>
+                <MudIcon Icon="@Icons.Material.Filled.MoreHoriz" Size="Size.Small" Class="ml-2" />
+            </button>
+        </ActivatorContent>
+        <ChildContent>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary px-4 py-1">Signed in as</MudText>
+            <MudText Typo="Typo.body2" Class="px-4" Style="word-break: break-all;">@_session.UserName</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary px-4 pb-2" Style="word-break: break-all;">@_session.Email</MudText>
+            <MudDivider />
+            <MudText Typo="Typo.caption" Class="mud-text-secondary px-4 pt-2 pb-1">Theme</MudText>
+            @foreach (var theme in JorvisThemes.All)
+            {
+                var option = theme;
+                <MudMenuItem OnClick="@(() => Themes.SetAsync(option))"
+                             Icon="@(option == Themes.Current ? Icons.Material.Filled.RadioButtonChecked : Icons.Material.Filled.RadioButtonUnchecked)"
+                             IconColor="Color.Primary">@option.Name</MudMenuItem>
+            }
+            <MudDivider />
+            <MudMenuItem Icon="@(Themes.IsDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                         OnClick="@(() => Themes.SetDarkModeAsync(!Themes.IsDarkMode))">
+                @(Themes.IsDarkMode ? "Light mode" : "Dark mode")
+            </MudMenuItem>
+            <MudDivider />
+            <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="@SignOutAsync">Sign Out</MudMenuItem>
+        </ChildContent>
+    </MudMenu>
+}
+
+@code {
+    private SessionResponse? _session;
+
+    private string Initial => _session is { UserName: { Length: > 0 } name } ? name[..1].ToUpperInvariant() : "?";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _session = await Auth.GetSessionAsync();
+        }
+        catch (HttpRequestException)
+        {
+            // No session: the HTTP handler is already sending the browser to Sign In.
+        }
+    }
+
+    private async Task SignOutAsync()
+    {
+        await Auth.SignOutAsync();
+        Navigation.NavigateTo(AuthenticationHandler.SignInPath, forceLoad: true);
+    }
+}

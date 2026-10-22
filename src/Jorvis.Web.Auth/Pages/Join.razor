@@ -1,0 +1,93 @@
+@page "/join"
+@inject AuthApi Api
+@inject PasskeyBrowser Passkeys
+@inject NavigationManager Navigation
+
+<PageTitle>Join — Jorvis</PageTitle>
+
+@if (_token is null)
+{
+    <MudText Align="Align.Center">You need an invite link.</MudText>
+}
+else
+{
+    <form @onsubmit="JoinAsync" class="w-100">
+        <MudStack Spacing="3">
+            <MudText Align="Align.Center">Choose a username and enter your email to finish setting up your account.</MudText>
+            <MudTextField T="string" @bind-Value="_username" Label="Username" Immediate="true" Variant="Variant.Outlined"
+                          AutoFocus="true" Required="true" MaxLength="32"
+                          UserAttributes="@(new Dictionary<string, object> { ["autocomplete"] = "username", ["autocapitalize"] = "none" })" />
+            <MudTextField T="string" @bind-Value="_email" Label="Email" InputType="InputType.Email" Immediate="true"
+                          Variant="Variant.Outlined" Required="true"
+                          UserAttributes="@(new Dictionary<string, object> { ["autocomplete"] = "email" })" />
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
+            }
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                       Size="Size.Large" Disabled="@(_busy || !_supported)">Continue</MudButton>
+        </MudStack>
+    </form>
+}
+
+@code {
+    private string? _token;
+    private string _username = "";
+    private string _email = "";
+    private string? _error;
+    private bool _busy;
+    private bool _supported = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The token lives in the fragment so it never reaches a server log.
+        var fragment = Navigation.ToAbsoluteUri(Navigation.Uri).Fragment.TrimStart('#');
+        _token = fragment.Split('&')
+            .Select(pair => pair.Split('=', 2))
+            .Where(pair => pair is [{ } name, _] && name == "token")
+            .Select(pair => Uri.UnescapeDataString(pair[1]))
+            .FirstOrDefault(value => value.Length > 0);
+        await Passkeys.ClearFragmentAsync();
+
+        if (_token is not null && !await Passkeys.IsSupportedAsync())
+        {
+            _supported = false;
+            _error = "This browser is not supported. Update it, or use a recent Safari, Chrome, Edge or Firefox.";
+        }
+    }
+
+    private async Task JoinAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var start = await Api.PostAsync("/api/auth/join/start", new { token = _token, email = _email, username = _username });
+            if (!start.Ok)
+            {
+                _error = start.Message;
+                return;
+            }
+
+            var created = await Passkeys.CreateAsync(start.Body);
+            if (created.Credential is not { } credential)
+            {
+                _error = PasskeyBrowser.Describe(created.Error);
+                return;
+            }
+
+            var finish = await Api.PostAsync("/api/auth/join/finish", new { token = _token, email = _email, username = _username, credential });
+            if (!finish.Ok)
+            {
+                _error = finish.Message;
+                return;
+            }
+
+            Navigation.NavigateTo("/", forceLoad: true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

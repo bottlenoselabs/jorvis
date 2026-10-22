@@ -1,23 +1,38 @@
 @inherits LayoutComponentBase
+@implements IDisposable
+@inject ThemeState Themes
+@inject NavigationManager Navigation
 
-<MudThemeProvider @ref="_themeProvider" @bind-IsDarkMode="_isDarkMode" />
+<MudThemeProvider @ref="_themeProvider" Theme="Themes.Current.Theme" IsDarkMode="Themes.IsDarkMode" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
 <MudLayout>
-    <MudAppBar Elevation="1">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@ToggleDrawer" />
-        <MudText Typo="Typo.h6" Class="ml-2">Jorvis</MudText>
-        <MudSpacer />
-        <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
-                       Color="Color.Inherit" OnClick="@ToggleDarkMode" aria-label="Toggle dark mode" />
-    </MudAppBar>
-    <MudDrawer @bind-Open="_drawerOpen" Elevation="1" Variant="DrawerVariant.Mini" ClipMode="DrawerClipMode.Always">
-        <NavMenu />
+    <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Responsive" Breakpoint="Breakpoint.Md" Elevation="0"
+               Width="280px" ClipMode="DrawerClipMode.Never">
+        <div class="d-flex flex-column" style="height: 100%;">
+            <div class="d-flex align-center justify-space-between pa-4">
+                <MudText Typo="Typo.h6">Jorvis</MudText>
+                <MudIconButton Icon="@Icons.Material.Outlined.ViewSidebar" Size="Size.Small" OnClick="@ToggleDrawer"
+                               aria-label="Close sidebar" />
+            </div>
+            <NavMenu />
+            <div class="flex-grow-1"></div>
+            <div class="persona pa-2">
+                <UserPersona />
+            </div>
+        </div>
     </MudDrawer>
-    <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.Medium" Class="my-6">
+    <MudMainContent Style="padding-top: 0;">
+        @* Always there, so opening or closing the drawer never moves the page up or down. *@
+        <div class="main-header d-flex align-center px-2">
+            @if (!_drawerOpen)
+            {
+                <MudIconButton Icon="@Icons.Material.Outlined.ViewSidebar" OnClick="@ToggleDrawer" aria-label="Open sidebar" />
+            }
+        </div>
+        <MudContainer MaxWidth="@(IsBoard ? MaxWidth.False : MaxWidth.Medium)" Class="pb-6">
             @Body
         </MudContainer>
     </MudMainContent>
@@ -26,18 +41,32 @@
 @code {
     private MudThemeProvider _themeProvider = null!;
     private bool _drawerOpen = true;
-    private bool _isDarkMode;
+
+    // A project's board gets the whole width for its lanes.
+    private bool IsBoard => Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("projects/", StringComparison.Ordinal);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Themes.Changed += OnThemeChanged;
+        Navigation.LocationChanged += OnLocationChanged;
+        await Themes.InitializeAsync();
+    }
+
+    private void OnThemeChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Themes.Changed -= OnThemeChanged;
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
-        {
-            _isDarkMode = await _themeProvider.GetSystemDarkModeAsync();
-            StateHasChanged();
-        }
+            Themes.UseSystemMode(await _themeProvider.GetSystemDarkModeAsync());
     }
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
-
-    private void ToggleDarkMode() => _isDarkMode = !_isDarkMode;
 }

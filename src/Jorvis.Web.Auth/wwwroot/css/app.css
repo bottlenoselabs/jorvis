@@ -1,0 +1,27 @@
+html, body {
+    margin: 0;
+    font-family: Roboto, system-ui, -apple-system, "Segoe UI", sans-serif;
+    color-scheme: light dark;
+}
+
+.loading {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    font-size: 2.125rem;
+    font-weight: 400;
+}
+
+#blazor-error-ui {
+    color-scheme: light only;
+    background: lightyellow;
+    bottom: 0;
+    box-sizing: border-box;
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}

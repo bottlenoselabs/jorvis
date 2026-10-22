@@ -1,0 +1,64 @@
+@page "/sign-in"
+@inject AuthApi Api
+@inject PasskeyBrowser Passkeys
+@inject NavigationManager Navigation
+
+<PageTitle>Sign In — Jorvis</PageTitle>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="w-100">@_error</MudAlert>
+}
+<MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large"
+           Disabled="@(_busy || !_supported)" OnClick="@SignInAsync">Sign In</MudButton>
+
+@code {
+    private string? _error;
+    private bool _busy;
+    private bool _supported = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || await Passkeys.IsSupportedAsync())
+            return;
+
+        _supported = false;
+        _error = "This browser is not supported. Update it, or use a recent Safari, Chrome, Edge or Firefox.";
+        StateHasChanged();
+    }
+
+    private async Task SignInAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var start = await Api.PostAsync("/api/auth/sign-in/start");
+            if (!start.Ok)
+            {
+                _error = start.Message;
+                return;
+            }
+
+            var asserted = await Passkeys.GetAsync(start.Body);
+            if (asserted.Credential is not { } credential)
+            {
+                _error = PasskeyBrowser.Describe(asserted.Error);
+                return;
+            }
+
+            var finish = await Api.PostAsync("/api/auth/sign-in/finish", new { credential });
+            if (!finish.Ok)
+            {
+                _error = finish.Message;
+                return;
+            }
+
+            Navigation.NavigateTo("/", forceLoad: true);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

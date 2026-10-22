@@ -1,0 +1,126 @@
+@* Who is in the project, and inviting others by username. Closes with Left when the signed-in user left. *@
+@inject ProjectApiClient Api
+@inject IDialogService Dialogs
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="this" OnValidSubmit="InviteAsync">
+            <div class="d-flex align-start gap-2">
+                <MudTextField T="string" Label="Invite by username" @bind-Value="_userName" Immediate="true" AutoFocus="true"
+                              HelperText="They'll see the invitation on their Projects page." Class="flex-grow-1" />
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4"
+                           Disabled="@(_busy || string.IsNullOrWhiteSpace(_userName))">Invite</MudButton>
+            </div>
+        </EditForm>
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+
+        <MudList T="string" Dense="true" Class="mt-4">
+            <MudListSubheader>Members</MudListSubheader>
+            @foreach (var member in Project.Members)
+            {
+                <MudListItem T="string" Icon="@(member.Role == ProjectRole.Owner ? Icons.Material.Filled.Star : Icons.Material.Outlined.Person)">
+                    <div class="d-flex align-center">
+                        <MudText Class="flex-grow-1">
+                            @member.UserName
+                            @if (member.UserName == UserName) { <span class="mud-text-secondary"> (you)</span> }
+                        </MudText>
+                        @if (member.Role == ProjectRole.Owner)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Owner</MudText>
+                        }
+                        else if (member.UserName == UserName)
+                        {
+                            <MudButton Size="Size.Small" Color="Color.Error" OnClick="LeaveAsync" Disabled="_busy">Leave</MudButton>
+                        }
+                        else if (Project.Role == ProjectRole.Owner)
+                        {
+                            <MudButton Size="Size.Small" Color="Color.Error" OnClick="@(() => RemoveAsync(member.UserName))" Disabled="_busy">Remove</MudButton>
+                        }
+                    </div>
+                </MudListItem>
+            }
+            @if (Project.InvitedUserNames.Count > 0)
+            {
+                <MudListSubheader>Invited</MudListSubheader>
+                @foreach (var invited in Project.InvitedUserNames)
+                {
+                    <MudListItem T="string" Icon="@Icons.Material.Outlined.MailOutline">
+                        <div class="d-flex align-center">
+                            <MudText Class="flex-grow-1">@invited</MudText>
+                            <MudButton Size="Size.Small" OnClick="@(() => CancelAsync(invited))" Disabled="_busy">Cancel invite</MudButton>
+                        </div>
+                    </MudListItem>
+                }
+            }
+        </MudList>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Close(DialogResult.Ok(Project)))">Done</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    public static readonly object Left = new();
+
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Parameter, EditorRequired] public ProjectResponse Project { get; set; } = null!;
+
+    /// <summary>The signed-in user's username.</summary>
+    [Parameter, EditorRequired] public string UserName { get; set; } = "";
+
+    private string _userName = "";
+    private string? _error;
+    private bool _busy;
+
+    private async Task InviteAsync() => await RunAsync(async () =>
+    {
+        Project = await Api.InviteAsync(Project.Label, _userName.Trim());
+        _userName = "";
+    });
+
+    private async Task CancelAsync(string userName) => await RunAsync(async () =>
+    {
+        await Api.CancelInvitationAsync(Project.Label, userName);
+        Project = Project with { InvitedUserNames = [.. Project.InvitedUserNames.Where(u => u != userName)] };
+    });
+
+    private async Task RemoveAsync(string userName) => await RunAsync(async () =>
+    {
+        await Api.RemoveMemberAsync(Project.Label, userName);
+        Project = Project with { Members = [.. Project.Members.Where(m => m.UserName != userName)] };
+    });
+
+    private async Task LeaveAsync()
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync("Leave project?",
+            $"You'll lose access to {Project.Name} until someone invites you again.", yesText: "Leave", cancelText: "Cancel");
+        if (confirmed == true)
+            await RunAsync(async () =>
+            {
+                await Api.RemoveMemberAsync(Project.Label, UserName);
+                Dialog.Close(DialogResult.Ok(Left));
+            });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

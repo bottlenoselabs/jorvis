@@ -1,89 +1,95 @@
 @page "/"
-@using Jorvis.Core.Contracts
-@using Jorvis.Web.Services
-@inject TaskApiClient Api
+@inject ProjectApiClient Api
+@inject IDialogService Dialogs
 @inject ISnackbar Snackbar
+@inject NavigationManager Navigation
 
-<PageTitle>Jorvis — Tasks</PageTitle>
+<PageTitle>Jorvis — Projects</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-4">Tasks</MudText>
+<div class="d-flex align-center mb-4">
+    <MudText Typo="Typo.h4">Projects</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync">
+        New project
+    </MudButton>
+</div>
 
-<MudPaper Class="pa-4 mb-6" Elevation="1">
-    <EditForm Model="_newTask" OnValidSubmit="AddTaskAsync">
-        <MudGrid>
-            <MudItem xs="12" sm="4">
-                <MudTextField T="string" Label="Title" @bind-Value="_newTask.Title" Required="true" />
-            </MudItem>
-            <MudItem xs="12" sm="4">
-                <MudTextField T="string?" Label="Notes" @bind-Value="_newTask.Notes" />
-            </MudItem>
-            <MudItem xs="12" sm="3">
-                <MudDatePicker Label="Due date" @bind-Date="_newTask.DueDateTime" />
-            </MudItem>
-            <MudItem xs="12" sm="1">
-                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
-                           Disabled="_saving" FullWidth="true">
-                    Add
-                </MudButton>
-            </MudItem>
-        </MudGrid>
-    </EditForm>
-</MudPaper>
+@if (_invitations.Count > 0)
+{
+    <MudText Typo="Typo.h6" Class="mb-2">Invitations</MudText>
+    <MudStack Spacing="2" Class="mb-6">
+        @foreach (var invitation in _invitations)
+        {
+            <MudPaper Class="pa-4 d-flex align-center flex-wrap gap-2" Elevation="1">
+                <div class="flex-grow-1">
+                    <MudText Typo="Typo.body1"><b>@invitation.InvitedBy</b> invited you to <b>@invitation.ProjectName</b></MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@invitation.ProjectLabel</MudText>
+                </div>
+                <MudButton Variant="Variant.Text" OnClick="@(() => DeclineAsync(invitation))">Decline</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => AcceptAsync(invitation))">Join</MudButton>
+            </MudPaper>
+        }
+    </MudStack>
+}
 
 @if (_loading)
 {
     <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
 }
-else if (_tasks.Count == 0)
+else if (_projects.Count == 0)
 {
-    <MudText Typo="Typo.body1" Class="mud-text-secondary">No tasks yet. Add one above.</MudText>
+    <MudText Typo="Typo.body1" Class="mud-text-secondary">
+        You're not in any projects yet. Create one or ask someone to invite you to one.
+    </MudText>
 }
 else
 {
-    <MudTable Items="_tasks" Hover="true">
-        <HeaderContent>
-            <MudTh></MudTh>
-            <MudTh>Title</MudTh>
-            <MudTh>Notes</MudTh>
-            <MudTh>Due date</MudTh>
-            <MudTh></MudTh>
-        </HeaderContent>
-        <RowTemplate>
-            <MudTd DataLabel="Done">
-                <MudCheckBox T="bool" Value="context.IsDone"
-                             ValueChanged="@(isDone => ToggleDoneAsync(context, isDone))" />
-            </MudTd>
-            <MudTd DataLabel="Title">
-                <MudText Style="@(context.IsDone ? "text-decoration: line-through;" : null)">@context.Title</MudText>
-            </MudTd>
-            <MudTd DataLabel="Notes">@context.Notes</MudTd>
-            <MudTd DataLabel="Due date">@context.DueDate</MudTd>
-            <MudTd>
-                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
-                               OnClick="@(() => DeleteTaskAsync(context))" />
-            </MudTd>
-        </RowTemplate>
-    </MudTable>
+    <MudGrid Spacing="3">
+        @foreach (var project in _projects)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <a href="@($"projects/{project.Label}")" class="project-link">
+                    <MudCard Elevation="1" Class="project-card">
+                        <MudCardContent>
+                            <MudText Typo="Typo.h6" Class="text-truncate">@project.Name</MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@project.Label</MudText>
+                            <div class="d-flex align-center gap-2 mt-3">
+                                <MudIcon Icon="@Icons.Material.Outlined.People" Size="Size.Small" Class="mud-text-secondary" />
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    @project.MemberCount @(project.MemberCount == 1 ? "member" : "members")
+                                </MudText>
+                                @if (project.Role == ProjectRole.Owner)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Owner</MudChip>
+                                }
+                            </div>
+                        </MudCardContent>
+                    </MudCard>
+                </a>
+            </MudItem>
+        }
+    </MudGrid>
 }
 
 @code {
-    private List<TaskResponse> _tasks = [];
-    private NewTaskModel _newTask = new();
+    private List<ProjectSummaryResponse> _projects = [];
+    private List<InvitationResponse> _invitations = [];
     private bool _loading = true;
-    private bool _saving;
 
-    protected override async Task OnInitializedAsync() => await LoadTasksAsync();
+    protected override async Task OnInitializedAsync() => await LoadAsync();
 
-    private async Task LoadTasksAsync()
+    private async Task LoadAsync()
     {
-        _loading = true;
         try
         {
-            _tasks = await Api.GetAllAsync();
+            var projects = Api.GetProjectsAsync();
+            var invitations = Api.GetInvitationsAsync();
+            _projects = await projects;
+            _invitations = await invitations;
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Could not load tasks: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Could not load projects: {ex.Message}", Severity.Error);
         }
         finally
         {
@@ -91,58 +97,39 @@ else
         }
     }
 
-    private async Task AddTaskAsync()
+    private async Task CreateAsync()
     {
-        if (string.IsNullOrWhiteSpace(_newTask.Title)) return;
-
-        _saving = true;
-        try
-        {
-            await Api.CreateAsync(new CreateTaskRequest(_newTask.Title, _newTask.Notes, _newTask.DueDate));
-            _newTask = new NewTaskModel();
-            await LoadTasksAsync();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Could not add task: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            _saving = false;
-        }
+        var dialog = await Dialogs.ShowAsync<NewProjectDialog>(
+            "New project", new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false, Data: ProjectResponse project })
+            Navigation.NavigateTo($"projects/{project.Label}");
     }
 
-    private async Task ToggleDoneAsync(TaskResponse task, bool isDone)
+    private async Task AcceptAsync(InvitationResponse invitation)
     {
         try
         {
-            await Api.UpdateAsync(task.Id, new UpdateTaskRequest(task.Title, task.Notes, task.DueDate, isDone));
-            await LoadTasksAsync();
+            var project = await Api.AcceptInvitationAsync(invitation.ProjectLabel);
+            Navigation.NavigateTo($"projects/{project.Label}");
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Could not update task: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Could not join: {ex.Message}", Severity.Error);
+            await LoadAsync();
         }
     }
 
-    private async Task DeleteTaskAsync(TaskResponse task)
+    private async Task DeclineAsync(InvitationResponse invitation)
     {
         try
         {
-            await Api.DeleteAsync(task.Id);
-            await LoadTasksAsync();
+            await Api.DeclineInvitationAsync(invitation.ProjectLabel);
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Could not delete task: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Could not decline: {ex.Message}", Severity.Error);
         }
-    }
 
-    private class NewTaskModel
-    {
-        public string Title { get; set; } = "";
-        public string? Notes { get; set; }
-        public DateTime? DueDateTime { get; set; }
-        public DateOnly? DueDate => DueDateTime is null ? null : DateOnly.FromDateTime(DueDateTime.Value);
+        await LoadAsync();
     }
 }
