@@ -1,0 +1,31 @@
+@* Asks for one line of text, such as a lane's name. The result's Data is the trimmed text. *@
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="this" OnValidSubmit="Submit" id="text-prompt">
+            <MudTextField T="string" Label="@Label" @bind-Value="Value" Immediate="true" AutoFocus="true" MaxLength="@MaxLength" />
+        </EditForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">Cancel</MudButton>
+        <MudButton ButtonType="ButtonType.Submit" form="text-prompt" Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="@(string.IsNullOrWhiteSpace(Value))">@SubmitText</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Parameter] public string Label { get; set; } = "Name";
+
+    [Parameter] public string Value { get; set; } = "";
+
+    [Parameter] public int MaxLength { get; set; } = 100;
+
+    [Parameter] public string SubmitText { get; set; } = "Save";
+
+    private void Submit()
+    {
+        if (!string.IsNullOrWhiteSpace(Value))
+            Dialog.Close(DialogResult.Ok(Value.Trim()));
+    }
+}

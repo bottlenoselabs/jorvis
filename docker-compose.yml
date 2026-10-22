@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: jorvis
       POSTGRES_PASSWORD: jorvis
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - jorvis-postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -29,10 +29,25 @@ services:
       jorvis-postgres:
         condition: service_healthy
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__Database: "Host=jorvis-postgres;Port=5432;Database=jorvis;Username=jorvis;Password=jorvis"
+      # Production unless overridden, e.g. `JORVIS_ENVIRONMENT=Development ./start.sh`.
+      ASPNETCORE_ENVIRONMENT: "${JORVIS_ENVIRONMENT:-Production}"
+      # "Gss Encryption Mode=Disable": we never use Kerberos, and the default probe for it prints a library error.
+      ConnectionStrings__Database: "Host=jorvis-postgres;Port=5432;Database=jorvis;Username=jorvis;Password=jorvis;Gss Encryption Mode=Disable"
+      # Used to build invite links; set JORVIS_PUBLIC_URL (shell or .env file) to your tunnel address.
+      Jorvis__PublicBaseUrl: "${JORVIS_PUBLIC_URL:-http://localhost:5200}"
+      # Cookie-encryption keys survive restarts, so people stay signed in.
+      DataProtection__KeysPath: /keys
     ports:
-      - "5117:8080"
+      - "127.0.0.1:5117:8080"
+    volumes:
+      - jorvis-api-keys:/keys
+    # The runtime image has no curl or wget, so probe /health over a raw TCP connection with bash.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q ' 200 '"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   jorvis-web:
     build:
@@ -41,9 +56,10 @@ services:
     container_name: jorvis-web
     restart: unless-stopped
     depends_on:
-      - jorvis-api
+      jorvis-api:
+        condition: service_healthy
     ports:
-      - "5200:80"
+      - "127.0.0.1:5200:80"
 
   jorvis-tunnel:
     image: cloudflare/cloudflared:latest
@@ -64,3 +80,4 @@ secrets:
 
 volumes:
   jorvis-postgres-data:
+  jorvis-api-keys:

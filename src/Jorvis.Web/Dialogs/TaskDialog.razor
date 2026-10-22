@@ -1,0 +1,101 @@
+@* Edits one task. Closes with the updated task, or with Deleted when it was deleted. *@
+@inject ProjectApiClient Api
+@inject IDialogService Dialogs
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">@Item.Key</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField T="string" Label="Title" @bind-Value="_title" Immediate="true" MaxLength="200" AutoFocus="true" />
+        <MudTextField T="string" Label="Description" @bind-Value="_description" Lines="8" Sizing="InputSizing.Auto" MaxLines="20"
+                      Variant="Variant.Outlined" Class="mt-4" MaxLength="10000" />
+        <MudSelect T="Guid" Label="Lane" @bind-Value="_laneId" Class="mt-4">
+            @foreach (var lane in Lanes)
+            {
+                <MudSelectItem Value="@lane.Id">@lane.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-4">
+            Created @Item.CreatedAt.LocalDateTime.ToString("g") · Updated @Item.UpdatedAt.LocalDateTime.ToString("g")
+        </MudText>
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-4">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteAsync" Disabled="_saving">Delete</MudButton>
+        <MudSpacer />
+        <MudButton OnClick="@(() => Dialog.Cancel())">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync"
+                   Disabled="@(_saving || string.IsNullOrWhiteSpace(_title))">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    public static readonly object Deleted = new();
+
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Parameter, EditorRequired] public string ProjectLabel { get; set; } = "";
+
+    [Parameter, EditorRequired] public TaskResponse Item { get; set; } = null!;
+
+    [Parameter, EditorRequired] public List<LaneResponse> Lanes { get; set; } = [];
+
+    private string _title = "";
+    private string? _description;
+    private Guid _laneId;
+    private string? _error;
+    private bool _saving;
+
+    protected override void OnInitialized()
+    {
+        _title = Item.Title;
+        _description = Item.Description;
+        _laneId = Item.LaneId;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var task = await Api.UpdateTaskAsync(ProjectLabel, Item.Number, new UpdateTaskRequest(_title, _description));
+            // A different lane: put it at the bottom of that lane.
+            if (_laneId != Item.LaneId)
+                task = await Api.MoveTaskAsync(ProjectLabel, Item.Number, new MoveTaskRequest(_laneId, int.MaxValue));
+            Dialog.Close(DialogResult.Ok(task));
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync("Delete task?", $"{Item.Key} \"{Item.Title}\" will be deleted for everyone.",
+            yesText: "Delete", cancelText: "Cancel");
+        if (confirmed != true)
+            return;
+
+        _saving = true;
+        try
+        {
+            await Api.DeleteTaskAsync(ProjectLabel, Item.Number);
+            Dialog.Close(DialogResult.Ok(Deleted));
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _saving = false;
+        }
+    }
+}

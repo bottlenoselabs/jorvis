@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Jorvis.Web;
@@ -14,8 +15,14 @@ if (string.IsNullOrWhiteSpace(apiBaseUrl))
     apiBaseUrl = builder.HostEnvironment.BaseAddress;
 }
 
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBaseUrl) });
-builder.Services.AddScoped<TaskApiClient>();
+builder.Services.AddScoped(sp => new HttpClient(
+    new AuthenticationHandler(sp.GetRequiredService<NavigationManager>()) { InnerHandler = new HttpClientHandler() })
+{
+    BaseAddress = new Uri(apiBaseUrl)
+});
+builder.Services.AddScoped<AuthApiClient>();
+builder.Services.AddScoped<ProjectApiClient>();
 builder.Services.AddMudServices();
+builder.Services.AddScoped<Jorvis.Web.Theming.ThemeState>();
 
 await builder.Build().RunAsync();

@@ -1,0 +1,256 @@
+@page "/projects/{Label}"
+@inject ProjectApiClient Api
+@inject AuthApiClient Auth
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Jorvis — @(_project?.Name ?? Label)</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+}
+else if (_project is null)
+{
+    <MudText Typo="Typo.h4" Class="mb-2">Project not found</MudText>
+    <MudText Typo="Typo.body1" Class="mud-text-secondary mb-4">
+        There's no project called <code>@Label</code>, or you're not a member of it.
+    </MudText>
+    <MudButton Href="" Variant="Variant.Outlined">Back to projects</MudButton>
+}
+else
+{
+    <div class="d-flex align-center flex-wrap gap-2 mb-4">
+        <div class="flex-grow-1" style="min-width: 0;">
+            <MudText Typo="Typo.h4" Class="text-truncate">@_project.Name</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@_project.Label</MudText>
+        </div>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.People" OnClick="MembersAsync">
+            Members (@_project.Members.Count)
+        </MudButton>
+        <MudMenu Icon="@Icons.Material.Filled.MoreVert" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight"
+                 aria-label="Project actions">
+            <MudMenuItem Icon="@Icons.Material.Filled.ViewColumn" OnClick="AddLaneAsync">Add lane</MudMenuItem>
+            @if (_project.Role == ProjectRole.Owner)
+            {
+                <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="RenameAsync">Rename project</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="DeleteAsync">Delete project</MudMenuItem>
+            }
+        </MudMenu>
+    </div>
+
+    <MudDropContainer T="TaskResponse" @ref="_container" Items="_tasks" Class="board"
+                      ItemsSelector="@((task, zone) => task.LaneId.ToString() == zone)" ItemDropped="DroppedAsync">
+        <ChildContent>
+            @foreach (var lane in _project.Lanes)
+            {
+                var current = lane;
+                var count = _tasks.Count(t => t.LaneId == current.Id);
+                <MudPaper Class="lane" Elevation="0" Outlined="true">
+                    <div class="lane-header d-flex align-center">
+                        <MudText Typo="Typo.subtitle2" Class="flex-grow-1 text-truncate">@current.Name</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary mr-1">@count</MudText>
+                        <MudMenu Icon="@Icons.Material.Filled.MoreHoriz" Size="Size.Small" Dense="true"
+                                 aria-label="@($"Actions for lane {current.Name}")">
+                            <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="@(() => RenameLaneAsync(current))">Rename</MudMenuItem>
+                            <MudMenuItem Icon="@Icons.Material.Filled.ChevronLeft" Disabled="@(current.Position == 0)"
+                                         OnClick="@(() => MoveLaneAsync(current, -1))">Move left</MudMenuItem>
+                            <MudMenuItem Icon="@Icons.Material.Filled.ChevronRight" Disabled="@(current.Position == _project.Lanes.Count - 1)"
+                                         OnClick="@(() => MoveLaneAsync(current, 1))">Move right</MudMenuItem>
+                            <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error"
+                                         Disabled="@(count > 0 || _project.Lanes.Count == 1)"
+                                         OnClick="@(() => DeleteLaneAsync(current))">Delete</MudMenuItem>
+                        </MudMenu>
+                    </div>
+                    <MudDropZone T="TaskResponse" Identifier="@current.Id.ToString()" AllowReorder="true" Class="lane-tasks" />
+                    <EditForm Model="this" OnValidSubmit="@(() => AddTaskAsync(current))" class="pa-2">
+                        <MudTextField T="string" Placeholder="Add a task" Value="@DraftFor(current)" Immediate="true"
+                                      ValueChanged="@(text => _drafts[current.Id] = text)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                      MaxLength="200" Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Add"
+                                      OnAdornmentClick="@(() => AddTaskAsync(current))" AdornmentAriaLabel="Add task" />
+                    </EditForm>
+                </MudPaper>
+            }
+        </ChildContent>
+        <ItemRenderer>
+            <MudPaper Class="task-card" Elevation="1" @onclick="@(() => OpenTaskAsync(context))">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Key</MudText>
+                <MudText Typo="Typo.body2" Class="task-title">@context.Title</MudText>
+                @if (!string.IsNullOrWhiteSpace(context.Description))
+                {
+                    <MudIcon Icon="@Icons.Material.Outlined.Notes" Size="Size.Small" Class="mud-text-secondary mt-1" />
+                }
+            </MudPaper>
+        </ItemRenderer>
+    </MudDropContainer>
+}
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+
+    private MudDropContainer<TaskResponse>? _container;
+    private ProjectResponse? _project;
+    private List<TaskResponse> _tasks = [];
+    private readonly Dictionary<Guid, string> _drafts = [];
+    private bool _loading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // The same page shows another project when only the label in the URL changes.
+        if (_project?.Label == Label)
+            return;
+
+        _loading = true;
+        _drafts.Clear();
+        try
+        {
+            _project = await Api.GetProjectAsync(Label);
+            _tasks = _project is null ? [] : await Api.GetTasksAsync(_project.Label);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not load the project: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string DraftFor(LaneResponse lane) => _drafts.GetValueOrDefault(lane.Id, "");
+
+    private async Task ReloadAsync()
+    {
+        try
+        {
+            _project = await Api.GetProjectAsync(Label);
+            _tasks = _project is null ? [] : await Api.GetTasksAsync(_project.Label);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not reload the project: {ex.Message}", Severity.Error);
+        }
+
+        StateHasChanged();
+        // The drop zones remember their own order; have them take it from the reloaded tasks.
+        _container?.Refresh();
+    }
+
+    private async Task TryAsync(string action, Func<Task> run)
+    {
+        try
+        {
+            await run();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not {action}: {ex.Message}", Severity.Error);
+        }
+
+        await ReloadAsync();
+    }
+
+    private async Task AddTaskAsync(LaneResponse lane)
+    {
+        var title = DraftFor(lane).Trim();
+        if (title.Length == 0)
+            return;
+
+        _drafts[lane.Id] = "";
+        await TryAsync("add the task", () => Api.CreateTaskAsync(_project!.Label, new CreateTaskRequest(title, null, lane.Id)));
+    }
+
+    private async Task DroppedAsync(MudItemDropInfo<TaskResponse> drop)
+    {
+        if (drop.Item is not { } task || !Guid.TryParse(drop.DropzoneIdentifier, out var laneId))
+            return;
+
+        await TryAsync("move the task", () => Api.MoveTaskAsync(_project!.Label, task.Number, new MoveTaskRequest(laneId, drop.IndexInZone)));
+    }
+
+    private async Task OpenTaskAsync(TaskResponse task)
+    {
+        var parameters = new DialogParameters<TaskDialog>
+        {
+            { d => d.ProjectLabel, _project!.Label },
+            { d => d.Item, task },
+            { d => d.Lanes, _project.Lanes }
+        };
+        var dialog = await Dialogs.ShowAsync<TaskDialog>(null, parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if (await dialog.Result is { Canceled: false })
+            await ReloadAsync();
+    }
+
+    private async Task MembersAsync()
+    {
+        var session = await Auth.GetSessionAsync();
+        var parameters = new DialogParameters<MembersDialog>
+        {
+            { d => d.Project, _project! },
+            { d => d.UserName, session?.UserName ?? "" }
+        };
+        var dialog = await Dialogs.ShowAsync<MembersDialog>("Members", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (result?.Data == MembersDialog.Left)
+            Navigation.NavigateTo("");
+        else
+            await ReloadAsync();
+    }
+
+    private async Task<string?> PromptAsync(string title, string label, string value, int maxLength, string submitText = "Save")
+    {
+        var parameters = new DialogParameters<TextPromptDialog>
+        {
+            { d => d.Label, label },
+            { d => d.Value, value },
+            { d => d.MaxLength, maxLength },
+            { d => d.SubmitText, submitText }
+        };
+        var dialog = await Dialogs.ShowAsync<TextPromptDialog>(title, parameters, new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        return await dialog.Result is { Canceled: false, Data: string text } ? text : null;
+    }
+
+    private async Task AddLaneAsync()
+    {
+        if (await PromptAsync("Add lane", "Lane name", "", 50, "Add") is { } name)
+            await TryAsync("add the lane", () => Api.CreateLaneAsync(_project!.Label, name));
+    }
+
+    private async Task RenameLaneAsync(LaneResponse lane)
+    {
+        if (await PromptAsync("Rename lane", "Lane name", lane.Name, 50) is { } name)
+            await TryAsync("rename the lane", () => Api.UpdateLaneAsync(_project!.Label, lane.Id, new UpdateLaneRequest(name, null)));
+    }
+
+    private async Task MoveLaneAsync(LaneResponse lane, int by) =>
+        await TryAsync("move the lane", () => Api.UpdateLaneAsync(_project!.Label, lane.Id, new UpdateLaneRequest(null, lane.Position + by)));
+
+    private async Task DeleteLaneAsync(LaneResponse lane) =>
+        await TryAsync("delete the lane", () => Api.DeleteLaneAsync(_project!.Label, lane.Id));
+
+    private async Task RenameAsync()
+    {
+        if (await PromptAsync("Rename project", "Name", _project!.Name, 100) is { } name)
+            await TryAsync("rename the project", () => Api.RenameProjectAsync(_project.Label, name));
+    }
+
+    private async Task DeleteAsync()
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync("Delete project?",
+            $"{_project!.Name} and all of its tasks will be deleted for every member. This can't be undone.",
+            yesText: "Delete", cancelText: "Cancel");
+        if (confirmed != true)
+            return;
+
+        try
+        {
+            await Api.DeleteProjectAsync(_project.Label);
+            Navigation.NavigateTo("");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not delete the project: {ex.Message}", Severity.Error);
+        }
+    }
+}

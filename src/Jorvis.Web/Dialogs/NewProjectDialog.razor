@@ -1,0 +1,60 @@
+@inject ProjectApiClient Api
+
+<MudDialog>
+    <DialogContent>
+        <EditForm Model="this" OnValidSubmit="CreateAsync" id="new-project">
+            <MudTextField T="string" Label="Name" Value="_name" ValueChanged="NameChanged" Immediate="true" AutoFocus="true"
+                          MaxLength="100" Required="true" />
+            <MudTextField T="string" Label="Label" @bind-Value="_label" Immediate="true" Class="mt-3"
+                          MaxLength="@ProjectLabels.MaxLength" Required="true" Error="@(_label.Length > 0 && !LabelIsValid)"
+                          HelperText="Used in links and the API, and can't be changed later. Lowercase words joined by dashes."
+                          Adornment="Adornment.Start" AdornmentText="projects/" />
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-4">@_error</MudAlert>
+            }
+        </EditForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">Cancel</MudButton>
+        <MudButton ButtonType="ButtonType.Submit" form="new-project" Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="@(_saving || _name.Trim().Length == 0 || !LabelIsValid)">Create</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    private string _name = "";
+    private string _label = "";
+    private string? _error;
+    private bool _saving;
+
+    private bool LabelIsValid => ProjectLabels.TryNormalize(_label, out _);
+
+    private void NameChanged(string name)
+    {
+        // Keep suggesting a label from the name until the person types their own.
+        if (_label == ProjectLabels.Suggest(_name))
+            _label = ProjectLabels.Suggest(name);
+        _name = name;
+    }
+
+    private async Task CreateAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            Dialog.Close(DialogResult.Ok(await Api.CreateProjectAsync(new CreateProjectRequest(_name, _label))));
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

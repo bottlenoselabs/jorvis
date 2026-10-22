@@ -82,3 +82,112 @@ h1:focus {
 code {
     color: #c02d76;
 }
+
+/* Lines up with the drawer's "Jorvis" header beside it. */
+.main-header {
+    height: 64px;
+}
+
+.persona-button {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: var(--mud-default-borderradius);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.persona-button:hover,
+.persona-button:focus-visible {
+    background: var(--mud-palette-action-default-hover);
+}
+
+.persona-email {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.persona .mud-menu {
+    display: flex;
+    width: 100%;
+}
+
+.persona-popover {
+    min-width: 264px;
+}
+
+.nav-project .mud-nav-link-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.project-link {
+    display: block;
+    height: 100%;
+    color: inherit;
+    text-decoration: none;
+    border-radius: var(--mud-default-borderradius);
+}
+
+.project-card {
+    height: 100%;
+}
+
+.project-link:hover .project-card,
+.project-link:focus-visible .project-card {
+    background: var(--mud-palette-action-default-hover);
+}
+
+/* Lanes share the board's width, so a few fit beside the open drawer without scrolling. The board only scrolls
+   sideways once there are too many to fit at their minimum width, and each lane scrolls on its own. */
+.board {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    overflow-x: auto;
+    padding-bottom: 8px;
+}
+
+.lane {
+    flex: 1 1 0;
+    min-width: 220px;
+    max-width: 340px;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 180px);
+    background: var(--mud-palette-background-gray);
+}
+
+.lane-header {
+    padding: 8px 4px 4px 12px;
+}
+
+.lane-tasks {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 48px;
+    padding: 4px 8px;
+    overflow-y: auto;
+}
+
+.task-card {
+    padding: 8px 12px;
+    cursor: pointer;
+}
+
+.task-card:hover {
+    background: var(--mud-palette-action-default-hover);
+}
+
+.task-title {
+    overflow-wrap: anywhere;
+}

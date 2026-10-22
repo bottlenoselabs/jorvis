@@ -4,4 +4,6 @@
   <Project Path="Jorvis.Core/Jorvis.Core.csproj" />
   <Project Path="Jorvis.Infrastructure/Jorvis.Infrastructure.csproj" />
   <Project Path="Jorvis.Web/Jorvis.Web.csproj" />
+  <Project Path="Jorvis.Web.Theming/Jorvis.Web.Theming.csproj" />
+  <Project Path="Jorvis.Web.Auth/Jorvis.Web.Auth.csproj" />
 </Solution>

@@ -23,5 +23,6 @@ Thumbs.db
 *.db-shm
 *.db-wal
 
-## Secrets
+## Environment variables
+# Do not use `.env` file for secrets!
 .env

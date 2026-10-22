@@ -1,0 +1,29 @@
+@inherits LayoutComponentBase
+@inject ThemeState Themes
+
+<MudThemeProvider @ref="_themeProvider" Theme="Themes.Current.Theme" IsDarkMode="Themes.IsDarkMode" />
+<MudPopoverProvider />
+
+<MudContainer MaxWidth="MaxWidth.ExtraSmall" Class="d-flex align-center justify-center" Style="min-height: 100vh;">
+    <MudPaper Elevation="2" Class="pa-8" Style="width: 100%;">
+        <MudStack Spacing="4" AlignItems="AlignItems.Center">
+            <MudText Typo="Typo.h4" Align="Align.Center">Jorvis</MudText>
+            @Body
+        </MudStack>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private MudThemeProvider _themeProvider = null!;
+
+    protected override async Task OnInitializedAsync() => await Themes.InitializeAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            Themes.UseSystemMode(await _themeProvider.GetSystemDarkModeAsync());
+            StateHasChanged();
+        }
+    }
+}
